@@ -7,7 +7,7 @@
     This script also automates post-deployment custom apps installation, SCCM onboarding, Defender checking and onboarding for Azure VMs,
 
 .NOTES
-    Owner: Cloud & DC, Uniting IT
+    Owner: 
     Date: June 2024
     Version: 1.0
     Notes: This script is intended for use in Azure infrastructure-as-code (IaC) VM Resource Deployments.
