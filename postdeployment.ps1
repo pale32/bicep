@@ -7,7 +7,7 @@
     This script also automates post-deployment custom apps installation, SCCM onboarding, Defender checking and onboarding for Azure VMs,
 
 .NOTES
-    Owner: 
+    Owner: Cloud & DC, Uniting IT
     Date: June 2024
     Version: 1.0
     Notes: This script is intended for use in Azure infrastructure-as-code (IaC) VM Resource Deployments.
@@ -122,7 +122,44 @@ function Rename-AdminUsername {
     }
 }
 
+function Set-RegionalSettings {
+    Set-TimeZone -Id "AUS Eastern Standard Time"
+    Set-WinSystemLocale en-AU
+    Set-WinUserLanguageList en-AU -Force
+    Set-WinUILanguageOverride -Language en-AU
+    Set-WinHomeLocation -GeoId 12
+}
+
+function Install-Pwsh7 {
+    Invoke-Expression "& { $(Invoke-RestMethod 'https://aka.ms/install-powershell.ps1') } -useMSI -Quiet -EnablePSRemoting"
+    Remove-Item -Path install-powershell.ps1
+}
+
+function Install-Chrome {
+    $chromeUrl = "https://dl.google.com/tag/s/dl/chrome/install/googlechromestandaloneenterprise64.msi"
+    $chromePath = "$env:TEMP\googlechromestandaloneenterprise64.msi"
+    Invoke-WebRequest -Uri $chromeUrl -OutFile $chromePath
+    Start-Process msiexec.exe -ArgumentList "/i `"$chromePath`" /quiet /norestart" -Wait
+    Remove-Item -Path $chromePath
+}
+
+$vmName = "yourvmname"
+$resourceGroupName = "yourresourcegroup"
+
+$scriptUrl = "https://yourstorageaccount.blob.core.windows.net/scripts/SetRegionalSettings.ps1" # URL of the script in storage
+
+$settings = @{
+    "fileUris" = @($scriptUrl)
+    "commandToExecute" = "powershell -ExecutionPolicy Unrestricted -File SetRegionalSettings.ps1"
+}
+
+Set-AzVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name "SetRegionalSettingsScript" -Publisher "Microsoft.Compute" -Type "CustomScriptExtension" -TypeHandlerVersion "1.10" -Settings $settings
+
+
 Disable-IEEnhancedSecurityConfiguration # IEESC Off
 Set-Hardening # Qualys compliance ## Configure Registry Settings
 Disable-GuestAccount # Disable the Guest Account
 Rename-AdminUsername # Rename the Local Admin Account
+Set-RegionalSettings # Set Language and Regional Settings
+Install-Pwsh7 # Download and install Powershell 7 (pwsh)
+#Install-Chrome # Download and install Google Chrome
