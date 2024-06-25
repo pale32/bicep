@@ -2,17 +2,13 @@
 .SYNOPSIS
     Installs and configures post-deployment applications and settings for Azure VMs.
 
-.DESCRIPTION
-    This script automates post-deployment configurations for Azure VMs recommended by Qualys.
-    This script also automates post-deployment custom apps installation, SCCM onboarding, Defender checking and onboarding for Azure VMs,
-
 .NOTES
-    Owner: Cloud & DC, Uniting IT
+    Owner: 
     Date: June 2024
     Version: 1.0
-    Notes: This script is intended for use in Azure infrastructure-as-code (IaC) VM Resource Deployments.
 #>
 
+Set-ExecutionPolicy RemoteSigned -Scope Process -Force
 function Disable-IEEnhancedSecurityConfiguration {
     $registryPath = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components"
 
@@ -123,16 +119,30 @@ function Rename-AdminUsername {
 }
 
 function Set-RegionalSettings {
-    Set-TimeZone -Id "AUS Eastern Standard Time"
-    Set-WinSystemLocale en-AU
-    Set-WinUserLanguageList en-AU -Force
     Set-WinUILanguageOverride -Language en-AU
+    Set-WinUserLanguageList -LanguageList (New-WinUserLanguageList -Language en-AU) -Force
+    Set-TimeZone -Name 'AUS Eastern Standard Time'
+    Set-WinSystemLocale -SystemLocale en-AU
     Set-WinHomeLocation -GeoId 12
 }
 
+function Set-AURegion {
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International' -Name 'Locale' -Value '00000C09'
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International' -Name 'LocaleName' -Value 'en-AU'
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International' -Name 'sLanguage' -Value 'ENA'
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International\Geo' -Name 'Name' -Value 'AU'
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International\Geo' -Name 'Nation' -Value '12'
+    Set-ItemProperty -Path 'HKCU:\Control Panel\International\User Profile' -Name 'Languages' -Value 'en-AU'
+    New-ItemProperty -Path 'HKCU:\Control Panel\International\User Profile\en-AU' -Name '00000C09' -PropertyType 'DWord' -Value 1 -Force
+    Remove-Item -Path 'HKCU:\Control Panel\International\User Profile\en-US' -ErrorAction SilentlyContinue
+}
+
+
 function Install-Pwsh7 {
     Invoke-Expression "& { $(Invoke-RestMethod 'https://aka.ms/install-powershell.ps1') } -useMSI -Quiet -EnablePSRemoting"
-    Remove-Item -Path install-powershell.ps1
+    if (Test-Path -Path install-powershell.ps1) {
+        Remove-Item -Path install-powershell.ps1
+    }
 }
 
 function Install-Chrome {
@@ -140,26 +150,16 @@ function Install-Chrome {
     $chromePath = "$env:TEMP\googlechromestandaloneenterprise64.msi"
     Invoke-WebRequest -Uri $chromeUrl -OutFile $chromePath
     Start-Process msiexec.exe -ArgumentList "/i `"$chromePath`" /quiet /norestart" -Wait
-    Remove-Item -Path $chromePath
+    if (Test-Path -Path $chromePath) {
+        Remove-Item -Path $chromePath
+    }
 }
-
-$vmName = "yourvmname"
-$resourceGroupName = "yourresourcegroup"
-
-$scriptUrl = "https://yourstorageaccount.blob.core.windows.net/scripts/SetRegionalSettings.ps1" # URL of the script in storage
-
-$settings = @{
-    "fileUris" = @($scriptUrl)
-    "commandToExecute" = "powershell -ExecutionPolicy Unrestricted -File SetRegionalSettings.ps1"
-}
-
-Set-AzVMCustomScriptExtension -ResourceGroupName $resourceGroupName -VMName $vmName -Name "SetRegionalSettingsScript" -Publisher "Microsoft.Compute" -Type "CustomScriptExtension" -TypeHandlerVersion "1.10" -Settings $settings
-
 
 Disable-IEEnhancedSecurityConfiguration # IEESC Off
 Set-Hardening # Qualys compliance ## Configure Registry Settings
 Disable-GuestAccount # Disable the Guest Account
-Rename-AdminUsername # Rename the Local Admin Account
-Set-RegionalSettings # Set Language and Regional Settings
-Install-Pwsh7 # Download and install Powershell 7 (pwsh)
+#Rename-AdminUsername # Rename the Local Admin Account
+#Set-RegionalSettings # Set Regional Settings
+#Set-AURegion # Set Regional Settings
+#Install-Pwsh7 # Download and install Powershell 7 (pwsh)
 #Install-Chrome # Download and install Google Chrome
